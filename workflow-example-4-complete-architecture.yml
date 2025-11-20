@@ -1,0 +1,345 @@
+name: Complete Container Architecture Example
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+# ====== GLOBAL LEVEL ======
+# Tüm job'lar ve step'ler için varsayılan ayarlar
+env:
+  REGISTRY: ghcr.io
+  DOCKER_BUILDKIT: 1
+  NODE_OPTIONS: "--max-old-space-size=4096"
+
+jobs:
+  # ====== JOB 1: GLOBAL + JOB + SERVICE ======
+  comprehensive-example:
+    name: "Complete Architecture Example"
+    runs-on: ubuntu-latest
+    
+    # JOB LEVEL: Bu job'un container'ı
+    container:
+      image: node:18-alpine
+      env:
+        # JOB LEVEL environment variables
+        CI: "true"
+        NODE_ENV: test
+        LOG_LEVEL: debug
+      
+      ports:
+        - 3000:3000
+        - 8080:8080
+      
+      options: |
+        --cpus 2
+        --memory 2048m
+    
+    # SERVICE LEVEL: Destekleyici containerlar
+    services:
+      # PostgreSQL servisi
+      database:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        options: |
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      # Redis servisi
+      cache:
+        image: redis:7-alpine
+        options: |
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    # JOB LEVEL: Defaults
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+    
+    steps:
+      # ====== SEVIYE 1: HOST MACHINE ======
+      - name: "Level 1: Checkout (Host Machine)"
+        uses: actions/checkout@v4
+      
+      # ====== SEVIYE 2: JOB CONTAINER ======
+      - name: "Level 2: Display Job Container Info"
+        run: |
+          echo "=== JOB-LEVEL CONTAINER INFO ==="
+          echo "Host: ${{ runner.name }}"
+          echo "Node Version: $(node --version)"
+          echo "npm Version: $(npm --version)"
+          echo "Container Check: $([[ -f /.dockerenv ]] && echo 'YES - In Container' || echo 'NO - On Host')"
+          echo ""
+          echo "Environment Variables (set at job level):"
+          echo "  CI: $CI"
+          echo "  NODE_ENV: $NODE_ENV"
+          echo "  LOG_LEVEL: $LOG_LEVEL"
+          echo ""
+          echo "Global Variables (set at workflow level):"
+          echo "  DOCKER_BUILDKIT: $DOCKER_BUILDKIT"
+          echo "  NODE_OPTIONS: $NODE_OPTIONS"
+      
+      # ====== SEVIYE 3: SERVICE CONTAINERS ======
+      - name: "Level 3: Verify Service Containers"
+        run: |
+          echo "=== SERVICE CONTAINERS STATUS ==="
+          
+          # PostgreSQL kontrol
+          echo "PostgreSQL Health:"
+          for i in {1..10}; do
+            if pg_isready -h database -p 5432; then
+              echo "  ✓ PostgreSQL is ready"
+              break
+            fi
+            echo "  Attempt $i..."
+            sleep 1
+          done
+          
+          # Redis kontrol
+          echo "Redis Health:"
+          for i in {1..10}; do
+            if redis-cli -h cache ping | grep -q PONG; then
+              echo "  ✓ Redis is ready"
+              break
+            fi
+            echo "  Attempt $i..."
+            sleep 1
+          done
+      
+      # ====== SEVIYE 4: STEP-LEVEL CONTAINER ======
+      - name: "Level 4A: Python Validation (Step Container)"
+        uses: docker://python:3.11-slim
+        with:
+          entrypoint: /bin/bash
+          args: |
+            -c '
+            echo "=== STEP-LEVEL CONTAINER (Python) ==="
+            echo "This step runs in its own Python container"
+            echo "Python Version: $(python --version)"
+            echo "Different from job container (Node 18-Alpine)"
+            
+            # Bu container'ın içinde çalışan Python kodu
+            python -c "import sys; print(f\"Python Path: {sys.executable}\")"
+            '
+      
+      - name: "Level 4B: Ruby Validation (Step Container)"
+        uses: docker://ruby:3.2
+        with:
+          entrypoint: /bin/bash
+          args: |
+            -c '
+            echo "=== STEP-LEVEL CONTAINER (Ruby) ==="
+            echo "This step runs in its own Ruby container"
+            echo "Ruby Version: $(ruby --version)"
+            echo "Completely isolated from Node 18 job container"
+            
+            ruby -e "puts \"Ruby Execution: Success\""
+            '
+      
+      # ====== JOB CONTAINER'A GERİ DÖN ======
+      - name: "Back to Job Container"
+        run: |
+          echo "=== BACK IN JOB-LEVEL CONTAINER ==="
+          echo "Node is available again: $(node --version)"
+          echo "Python is NOT available: $(python --version 2>&1 || echo 'Not found')"
+          echo "Ruby is NOT available: $(ruby --version 2>&1 || echo 'Not found')"
+      
+      # ====== TÜMLÜ BIR TEST ÖRNEĞI ======
+      - name: "Integration Test: Using all levels"
+        run: |
+          echo "=== COMPREHENSIVE TEST SCENARIO ==="
+          echo ""
+          echo "1. Job Container: Node.js installed"
+          node --version
+          
+          echo "2. Service Containers: Database and Cache running"
+          echo "Database accessible at: database:5432"
+          echo "Cache accessible at: cache:6379"
+          
+          echo "3. Testing service connectivity from job container..."
+          
+          # PostgreSQL ile bağlantı
+          npm install -g pg-isready 2>/dev/null || true
+          PGPASSWORD=testpass pg_isready -h database -p 5432 -U testuser && \
+            echo "✓ Can connect to PostgreSQL" || \
+            echo "✗ Cannot connect to PostgreSQL"
+          
+          # Redis ile bağlantı
+          npm install -g redis-cli 2>/dev/null || true
+          redis-cli -h cache -p 6379 PING && \
+            echo "✓ Can connect to Redis" || \
+            echo "✗ Cannot connect to Redis"
+          
+          echo ""
+          echo "Architecture Summary:"
+          echo "├── Host Runner (Ubuntu Linux)"
+          echo "│   ├── Job Container (Node 18-Alpine) ← Current level"
+          echo "│   │   ├── Step Container (Python 3.11) ← Executed separately"
+          echo "│   │   ├── Step Container (Ruby 3.2) ← Executed separately"
+          echo "│   │   ├── Service: PostgreSQL 15"
+          echo "│   │   └── Service: Redis 7"
+          echo "│   └── Workflow Artifacts & Logs"
+      
+      # ====== LIFECYCLE ÖRNEĞI ======
+      - name: "Lifecycle Example"
+        if: always()
+        run: |
+          echo "=== CONTAINER LIFECYCLE ==="
+          echo ""
+          echo "What happens to each container:"
+          echo ""
+          echo "1. Job Container (Node 18-Alpine):"
+          echo "   - Started at job begin"
+          echo "   - Runs until job ends"
+          echo "   - Files in /github/workspace persist (shared with host)"
+          echo "   - Files elsewhere are lost"
+          echo "   - STOPS AND REMOVED when job finishes"
+          echo ""
+          echo "2. Service Containers (PostgreSQL, Redis):"
+          echo "   - Started at job begin"
+          echo "   - Run throughout entire job"
+          echo "   - Accessible via hostname from job container"
+          echo "   - Data is temporary (non-persistent)"
+          echo "   - STOP AND REMOVED when job finishes"
+          echo ""
+          echo "3. Step Containers (Python, Ruby):"
+          echo "   - Created when step executes"
+          echo "   - Run only for that step"
+          echo "   - Isolated from other steps"
+          echo "   - STOPS AND REMOVED immediately after step"
+          echo ""
+          echo "4. Host Runner:"
+          echo "   - Cleaned up after workflow"
+          echo "   - Ready for next workflow"
+      
+      # ====== ARTIFACT UPLOAD ======
+      - name: "Create summary artifact"
+        if: always()
+        run: |
+          cat > architecture-summary.txt << 'EOF'
+          # GitHub Actions Docker Container Architecture Report
+          
+          ## Levels Demonstrated:
+          
+          ### Level 1: Host Machine (Runner)
+          - Ubuntu 22.04 VM
+          - Direct access to /github/workspace
+          - Only this level persists between jobs
+          
+          ### Level 2: Job Container
+          - Node 18-Alpine
+          - All workflow steps run here (unless overridden by step containers)
+          - Services are accessible via hostname
+          - Removed when job finishes
+          
+          ### Level 3: Service Containers
+          - PostgreSQL 15-Alpine (database:5432)
+          - Redis 7-Alpine (cache:6379)
+          - Run throughout job lifecycle
+          - Accessible from job container via service name
+          - Ephemeral (no persistent data)
+          
+          ### Level 4: Step Containers
+          - Python 3.11 (for specific step)
+          - Ruby 3.2 (for specific step)
+          - Override job container for single step
+          - Isolated execution environment
+          - Removed immediately after step
+          
+          ## Key Insights:
+          
+          1. **Hierarchy**: Host > Job Container > Services + Step Containers
+          2. **Isolation**: Each level is isolated from others
+          3. **Persistence**: Only host level files persist
+          4. **Lifecycle**: Each container is temporary
+          5. **Networking**: Services accessible via hostname from job container
+          
+          ## Best Practices:
+          
+          - Use job containers for consistent environment
+          - Use service containers for databases/external services
+          - Use step containers for one-off tools
+          - Understand that all container data is ephemeral
+          - Write artifacts to /github/workspace to persist data
+          EOF
+          
+          cat architecture-summary.txt
+      
+      - name: "Upload architecture summary"
+        uses: actions/upload-artifact@v3
+        with:
+          name: architecture-analysis
+          path: architecture-summary.txt
+  
+  # ====== JOB 2: ONLY STEP-LEVEL CONTAINERS ======
+  step-level-only:
+    name: "Step-Level Only Example"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: "Python step"
+        uses: docker://python:3.11
+        with:
+          entrypoint: python
+          args: -c "print('Hello from Python container')"
+      
+      - name: "Node step"
+        uses: docker://node:18
+        with:
+          entrypoint: node
+          args: -e "console.log('Hello from Node container')"
+      
+      - name: "Java step"
+        uses: docker://openjdk:17
+        with:
+          entrypoint: java
+          args: -version
+      
+      - name: "Host step"
+        run: echo "Hello from runner host machine"
+
+  # ====== JOB 3: SERVICES ONLY (NO JOB CONTAINER) ======
+  services-only:
+    name: "Services Only Example"
+    runs-on: ubuntu-latest
+    
+    # NO job-level container!
+    # Steps run directly on host
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+        options: |
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Verify services
+        run: |
+          echo "Running on host (not in container)"
+          uname -a
+          
+          # But services are still accessible
+          echo "Connecting to PostgreSQL..."
+          PGPASSWORD=test psql -h postgres -U postgres -c "SELECT 1"

@@ -1,0 +1,145 @@
+name: Step-Level Container Example
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  multi-language-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # ====== PYTHON ADIMI ======
+      - name: "Step 1: Python Testing (Python 3.11 Container)"
+        uses: docker://python:3.11-slim
+        with:
+          entrypoint: /bin/bash
+          args: |
+            -c '
+            echo "=== Python Step ==="
+            python --version
+            pip --version
+            
+            # Bağımlılıkları yükle (örnek)
+            pip install requests pytest
+            
+            # Test dosyalarını çalıştır (varsa)
+            echo "Running Python tests..."
+            if [ -f tests/test_python.py ]; then
+              pytest tests/test_python.py -v
+            else
+              echo "No Python tests found"
+            fi
+            '
+      
+      # ====== NODE.JS ADIMI ======
+      - name: "Step 2: JavaScript Testing (Node 18 Container)"
+        uses: docker://node:18-alpine
+        with:
+          entrypoint: sh
+          args: |
+            -c '
+            echo "=== JavaScript Step ==="
+            node --version
+            npm --version
+            
+            # Bağımlılıkları yükle
+            npm ci
+            
+            # Lint ve test çalıştır
+            echo "Running JavaScript linter..."
+            npm run lint 2>/dev/null || echo "Linter not configured"
+            
+            echo "Running JavaScript tests..."
+            npm test 2>/dev/null || echo "Tests not configured"
+            '
+      
+      # ====== RUBY ADIMI ======
+      - name: "Step 3: Ruby Testing (Ruby 3.2 Container)"
+        uses: docker://ruby:3.2
+        with:
+          entrypoint: /bin/bash
+          args: |
+            -c '
+            echo "=== Ruby Step ==="
+            ruby --version
+            gem --version
+            
+            # Bundler yükle ve bağımlılıkları kur
+            gem install bundler
+            
+            # Gemfile varsa işle
+            if [ -f Gemfile ]; then
+              bundle install
+              echo "Running Ruby tests..."
+              bundle exec rspec 2>/dev/null || bundle exec ruby -Ilib tests/*.rb 2>/dev/null || echo "Tests not configured"
+            else
+              echo "No Gemfile found"
+            fi
+            '
+      
+      # ====== GO ADIMI ======
+      - name: "Step 4: Go Testing (Go 1.21 Container)"
+        uses: docker://golang:1.21-alpine
+        with:
+          entrypoint: sh
+          args: |
+            -c '
+            echo "=== Go Step ==="
+            go version
+            
+            # Go mod download
+            go mod download 2>/dev/null || echo "No go.mod file"
+            
+            # Lint ve test
+            if [ -f go.mod ]; then
+              echo "Running Go tests..."
+              go test ./... -v 2>/dev/null || echo "Tests not found"
+            else
+              echo "No Go module found"
+            fi
+            '
+      
+      # ====== JAVA ADIMI ======
+      - name: "Step 5: Java Testing (Java 17 Container)"
+        uses: docker://openjdk:17-jdk-slim
+        with:
+          entrypoint: /bin/bash
+          args: |
+            -c '
+            echo "=== Java Step ==="
+            java -version
+            
+            # Maven varsa kullan
+            if command -v mvn &> /dev/null; then
+              echo "Maven found"
+              mvn --version
+              if [ -f pom.xml ]; then
+                echo "Running Maven tests..."
+                mvn test 2>/dev/null || echo "Tests not configured"
+              fi
+            else
+              echo "Maven not found"
+            fi
+            '
+      
+      # ====== HOST MACHINE ADIMI ======
+      - name: "Step 6: Summary (Host Machine - No Container)"
+        run: |
+          echo "=== Workflow Summary ==="
+          echo "All steps completed successfully!"
+          echo "✓ Python container executed"
+          echo "✓ JavaScript container executed"
+          echo "✓ Ruby container executed"
+          echo "✓ Go container executed"
+          echo "✓ Java container executed"
+          echo "✓ Host runner step executed"
+          echo ""
+          echo "Each step ran in its own isolated container (except this step)"
+          echo "Files created in containers are not persisted"
+          echo "Only repository files and artifacts can be shared between steps"

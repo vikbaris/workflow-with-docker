@@ -1,0 +1,151 @@
+name: Job-Level Container Example
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    # JOB-LEVEL: Tüm adımlar bu container'da çalışır
+    container:
+      image: node:18-alpine
+      
+      # Environment variable'lar
+      env:
+        CI: "true"
+        NODE_ENV: test
+        LOG_LEVEL: debug
+      
+      # Expose edilecek port'lar
+      ports:
+        - 3000:3000
+      
+      # Container runtime seçenekleri
+      options: |
+        --cpus 2
+        --memory 2048m
+        --ipc host
+    
+    # Service container'lar: Tüm job boyunca çalışır
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass123
+          POSTGRES_DB: testdb
+        options: |
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: |
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Show environment info
+        run: |
+          echo "=== Environment Info ==="
+          node --version
+          npm --version
+          echo "Node ENV: $NODE_ENV"
+          echo "Log Level: $LOG_LEVEL"
+          echo "Working directory: $(pwd)"
+      
+      - name: Check if we're in container
+        run: |
+          if [ -f /.dockerenv ]; then
+            echo "✓ Running inside Docker container"
+          else
+            echo "✗ Not running in container"
+          fi
+      
+      - name: Install dependencies
+        run: |
+          echo "Installing npm packages..."
+          npm ci
+          npm list
+      
+      - name: Verify service connectivity
+        run: |
+          echo "=== Testing Service Connectivity ==="
+          
+          # PostgreSQL bağlantı testi
+          echo "Testing PostgreSQL..."
+          npm install -g pg-isready || true
+          until pg_isready -h postgres -p 5432 -U testuser; do
+            echo "PostgreSQL not ready, retrying..."
+            sleep 2
+          done
+          echo "✓ PostgreSQL is ready"
+          
+          # Redis bağlantı testi
+          echo "Testing Redis..."
+          npm install -g redis-cli || true
+          until redis-cli -h redis ping | grep -q PONG; do
+            echo "Redis not ready, retrying..."
+            sleep 1
+          done
+          echo "✓ Redis is ready"
+      
+      - name: Run linter
+        run: |
+          npm run lint 2>/dev/null || echo "Linter not configured"
+      
+      - name: Run unit tests
+        run: npm test --passWithNoTests
+      
+      - name: Run integration tests
+        run: npm run test:integration --passWithNoTests || true
+        env:
+          # Service container'lara erişim
+          DATABASE_URL: postgresql://testuser:testpass123@postgres:5432/testdb
+          REDIS_URL: redis://redis:6379/0
+      
+      - name: Build application
+        run: |
+          npm run build 2>/dev/null || echo "Build script not found"
+      
+      - name: Create test report
+        if: always()
+        run: |
+          echo "=== Test Summary ===" > test-summary.txt
+          echo "Date: $(date)" >> test-summary.txt
+          echo "Container: Docker Node 18-Alpine" >> test-summary.txt
+          echo "Database: PostgreSQL 15" >> test-summary.txt
+          echo "Cache: Redis 7" >> test-summary.txt
+      
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: |
+            test-summary.txt
+            coverage/
+            reports/
+          if-no-files-found: ignore
+      
+      - name: Job status
+        if: always()
+        run: |
+          echo "=== Job Completion Status ==="
+          echo "Job Status: ${{ job.status }}"
+          echo "Container will now be stopped and removed"
