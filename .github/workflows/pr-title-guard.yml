@@ -3,6 +3,7 @@ name: "PR Title Guard (JS Action)"
 on:
   pull_request:
     types: [opened, edited, reopened, ready_for_review, synchronize]
+  workflow_dispatch:
 
 jobs:
   check-title:

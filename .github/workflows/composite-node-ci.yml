@@ -1,11 +1,20 @@
 name: "Node Monorepo CI (Composite Action)"
 
 on:
+  push:
+    branches: [main, master]
+    paths:
+      - "services/**"
+      - "package*.json"
+      - ".github/workflows/composite-node-ci.yml"
+      - "custom-actions/**"
   pull_request:
     paths:
       - "services/**"
       - "package*.json"
       - ".github/workflows/composite-node-ci.yml"
+      - "custom-actions/**"
+  workflow_dispatch:
 
 jobs:
   quality-gate:
