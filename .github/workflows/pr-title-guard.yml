@@ -17,7 +17,7 @@ jobs:
         name: Enforce Conventional PR title
         uses: ./custom-actions/javascript-pr-title-guard
         with:
-          allowed-types: "feat,fix,chore,docs,refactor,perf,test,security"
+          allowed-types: "feature,fix,chore,docs,refactor,perf,test,security"
           require-scope: "true"
           allow-draft: "false"
 
