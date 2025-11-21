@@ -23,7 +23,9 @@ if [ -n "$VAR_FILE" ]; then
     echo "::error::var-file not found: $VAR_FILE"
     exit 1
   fi
-  TMP_VAR_FILE="$(mktemp "${RUNNER_TEMP:-/tmp}/tfvars-XXXX.auto.tfvars")"
+  TMPDIR=${RUNNER_TEMP:-/tmp}                               # RUNNER_TEMP container'da olmayabilir
+  mkdir -p "$TMPDIR"
+  TMP_VAR_FILE="$(mktemp "$TMPDIR/tfvars-XXXX.auto.tfvars")"
   cp "$VAR_FILE" "$TMP_VAR_FILE"
   export TF_CLI_ARGS_validate="-var-file=$TMP_VAR_FILE"
 fi

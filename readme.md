@@ -6,7 +6,7 @@ Bu pakette GitHub Actions'ta Docker container kullanımı hakkında kapsamlı e�
 
 ---
 
-## 📖 1. Ana Rehber (Başla Buradan)
+## 📖 1. Ana Rehber
 
 **Dosya**: `github_actions_docker_rehberi.md`
 
