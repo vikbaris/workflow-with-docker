@@ -1,0 +1,27 @@
+name: "PR Title Guard (JavaScript)"
+description: "Enforces Conventional Commit style PR titles for pull requests"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  allowed-types:
+    description: "Comma-separated list of allowed types (feat,fix,chore,docs,refactor,perf,test...)"
+    required: false
+    default: "feat,fix,chore,docs,refactor,perf,test"
+  require-scope:
+    description: "If true, scope like type(scope): subject is mandatory"
+    required: false
+    default: "false"
+  allow-draft:
+    description: "If false, draft PR titles are rejected"
+    required: false
+    default: "false"
+
+outputs:
+  normalized-title:
+    description: "Title after trimming whitespace (useful for release steps)"
+
+runs:
+  using: "node20"
+  main: "index.js"

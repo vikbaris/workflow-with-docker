@@ -1,0 +1,26 @@
+name: "PR Title Guard (JS Action)"
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, ready_for_review, synchronize]
+
+jobs:
+  check-title:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: enforce
+        name: Enforce Conventional PR title
+        uses: ./custom-actions/javascript-pr-title-guard
+        with:
+          allowed-types: "feat,fix,chore,docs,refactor,perf,test,security"
+          require-scope: "true"
+          allow-draft: "false"
+
+      - name: Echo normalized title (for demo)
+        if: always()
+        run: |
+          echo "Normalized title: ${{ steps.enforce.outputs.normalized-title }}"

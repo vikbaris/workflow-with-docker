@@ -1,0 +1,59 @@
+name: "Node Monorepo Quality Gate (Composite)"
+description: "Setup Node, install deps, run lint + tests with coverage for a workspace"
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  node-version:
+    description: "Node.js version to install"
+    required: false
+    default: "20"
+  working-directory:
+    description: "Relative path to the package/workspace"
+    required: false
+    default: "."
+
+outputs:
+  test-status:
+    description: "pass|fail for the test phase"
+    value: ${{ steps.tests.outputs.status }}
+  coverage-file:
+    description: "Absolute path to lcov.info if generated"
+    value: ${{ steps.tests.outputs.coverage_file }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node with npm cache
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "npm"
+        cache-dependency-path: "${{ inputs.working-directory }}/package-lock.json"
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        npm ci
+
+    - name: Run lint
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        npm run lint
+
+    - id: tests
+      name: Run tests with coverage
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        npm test -- --coverage
+        echo "status=pass" >> "$GITHUB_OUTPUT"
+        if [ -f coverage/lcov.info ]; then
+          echo "coverage_file=$PWD/coverage/lcov.info" >> "$GITHUB_OUTPUT"
+        fi

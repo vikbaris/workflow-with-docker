@@ -1,0 +1,22 @@
+name: "Terraform Validate (Docker)"
+description: "Runs terraform fmt -check, init (backend disabled), and validate inside a pinned Terraform image"
+branding:
+  icon: "terminal"
+  color: "purple"
+
+inputs:
+  path:
+    description: "Terraform root/module path"
+    required: false
+    default: "."
+  var-file:
+    description: "Optional tfvars file passed to validate"
+    required: false
+    default: ""
+
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  args:
+    - ${{ inputs.path }}
+    - ${{ inputs['var-file'] }}

@@ -1,0 +1,28 @@
+name: "Node Monorepo CI (Composite Action)"
+
+on:
+  pull_request:
+    paths:
+      - "services/**"
+      - "package*.json"
+      - ".github/workflows/composite-node-ci.yml"
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: quality-gate
+        name: Run reusable Node CI steps
+        uses: ./custom-actions/composite-node-ci
+        with:
+          node-version: "20"
+          working-directory: "services/api"
+
+      - name: Publish coverage artifact
+        if: steps.quality-gate.outputs.coverage-file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage-lcov
+          path: ${{ steps.quality-gate.outputs.coverage-file }}

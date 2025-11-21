@@ -1,0 +1,21 @@
+name: "Terraform Validate (Docker Action)"
+
+on:
+  pull_request:
+    paths:
+      - "infra/**.tf"
+      - "infra/**.tfvars"
+      - ".github/workflows/terraform-validate.yml"
+  workflow_dispatch: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run terraform fmt/init/validate in container
+        uses: ./custom-actions/docker-terraform-validate
+        with:
+          path: "infra"
+          var-file: "infra/dev.tfvars"
